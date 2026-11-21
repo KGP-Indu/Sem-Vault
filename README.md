@@ -24,8 +24,9 @@ Do every step **signed in as kgp.indu@gmail.com**. A private or incognito browse
    npx @google/clasp login
    ```
    ```powershell
-   cd apps-script; npx @google/clasp create --type standalone --title "Sem Vault" --rootDir .; npx @google/clasp push
+   cd apps-script; npx @google/clasp create --type standalone --title "Sem Vault" --rootDir .; git checkout -- appsscript.json; npx @google/clasp push
    ```
+   `clasp create` replaces `appsscript.json` with Google's default; the `git checkout` puts ours back (India timezone, web-app settings, permissions). When `push` asks to overwrite the manifest, answer **yes**.
    No Node? Instead, create a new project at <https://script.google.com>, add one script file per `.js` file in `apps-script/` (same names), and paste in the contents. Then turn on "Show appsscript.json" in Project Settings and paste `appsscript.json` too.
 3. Open the project (<https://script.google.com>, then **Sem Vault**). Choose the function **`setup`** in the toolbar and click **Run**.
    - Google warns *"Google hasn't verified this app"*. That's expected: it's your own script. Click **Advanced → Go to Sem Vault → Allow**.

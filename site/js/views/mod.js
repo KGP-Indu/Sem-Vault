@@ -1,14 +1,14 @@
 import { post, getCatalog, clearCatalogCache, previewMode, mockMode } from '../api.js';
 import { GOOGLE_CLIENT_ID } from '../config.js';
-import { semesters, coursePage, search, TYPE_ORDER, TYPE_LABELS } from '../lib/catalog.js';
-import { startHereChanges, fmtTime } from '../lib/mod.js';
+import { semesters, search, TYPE_ORDER, TYPE_LABELS } from '../lib/catalog.js';
+import { fmtTime } from '../lib/mod.js';
 import { esc, courseOf } from './item.js';
 
 // Kept in memory only (never storage). Survives hash navigation, not a reload.
 let session = null; // { token, email, role }
 
 const TABS = [
-  ['queue', 'Queue'], ['start', 'Start here'], ['library', 'Library'], ['activity', 'Activity'], ['owner', 'Mods'],
+  ['queue', 'Queue'], ['library', 'Library'], ['profs', 'Professors'], ['activity', 'Activity'], ['owner', 'Mods'],
 ];
 
 export function render(el, params) {
@@ -31,7 +31,7 @@ export function render(el, params) {
     render(el, params);
   });
   const body = el.querySelector('[data-tab]');
-  const views = { queue: tabQueue, start: tabStart, library: tabLibrary, activity: tabActivity, owner: tabOwner };
+  const views = { queue: tabQueue, library: tabLibrary, profs: tabProfs, activity: tabActivity, owner: tabOwner };
   views[tab](body, params).catch((err) => handleError(el, params, body, err));
 }
 
@@ -59,7 +59,7 @@ async function refreshCatalog() {
 function renderSignIn(el, params) {
   el.innerHTML = `
     <h1>Mod panel</h1>
-    <p class="lede">Mods review uploads and choose what goes under “Start here” on each course. Sign in with your Google account.</p>
+    <p class="lede">Mods review uploads and professor tips before they go on the site. Sign in with your Google account.</p>
     <p class="form-error" data-signin-msg role="alert"></p>
     <div data-signin></div>`;
   const slot = el.querySelector('[data-signin]');
@@ -133,14 +133,96 @@ function courseOptions(courses, selected) {
 }
 
 async function tabQueue(body, params) {
-  const [{ items }, catalog] = await Promise.all([call('pending'), getCatalog()]);
-  if (!items.length) {
-    body.innerHTML = '<p class="empty">Nothing waiting. New uploads show up here, and mods get an email at 8 am and 9 pm when something is waiting.</p>';
+  const [{ items, tips = [], profs = [] }, catalog] = await Promise.all([call('pending'), getCatalog()]);
+  if (!items.length && !tips.length) {
+    body.innerHTML = '<p class="empty">Nothing waiting. New uploads and tips show up here, and mods get an email at 8 am and 9 pm when something is waiting.</p>';
     return;
   }
-  body.innerHTML = `<p class="section-note">${items.length} waiting, oldest first.</p>` +
-    items.sort((a, b) => String(a.uploadedAt).localeCompare(String(b.uploadedAt))).map((it) => queueCard(it, catalog.courses)).join('');
+  const byTime = (k) => (a, b) => String(a[k]).localeCompare(String(b[k]));
+  body.innerHTML = `
+    ${items.length ? `<h2>Uploads <span class="group-count">${items.length}</span></h2>
+      <p class="section-note">Oldest first.</p>
+      ${items.sort(byTime('uploadedAt')).map((it) => queueCard(it, catalog.courses)).join('')}` : ''}
+    ${tips.length ? `<h2>Professor tips <span class="group-count">${tips.length}</span></h2>
+      <p class="section-note">Approve tips about teaching, grading and exams. Reject anything personal or abusive.</p>
+      ${tips.sort(byTime('submittedAt')).map((t) => tipCard(t, profs, catalog.courses)).join('')}` : ''}`;
   body.querySelectorAll('[data-card]').forEach((card) => wireQueueCard(card, items.find((x) => x.id === card.dataset.card), catalog, body, params));
+  body.querySelectorAll('[data-tipcard]').forEach((card) => wireTipCard(card, tips.find((x) => x.id === card.dataset.tipcard), body, params));
+}
+
+// A blank first choice when the current value isn't in the list, so nothing gets picked silently.
+function profOptions(profs, selected) {
+  const known = profs.some((p) => p.id === selected);
+  return (known ? '' : '<option value="" selected>Pick a professor</option>') +
+    [...profs].sort((a, b) => a.name.localeCompare(b.name)).map((p) =>
+      `<option value="${esc(p.id)}"${p.id === selected ? ' selected' : ''}>${esc(p.name)}${p.status === 'pending' ? ' (new)' : ''}</option>`).join('');
+}
+
+function tipCourseOptions(courses, selected) {
+  const known = courses.some((c) => c.code === selected);
+  return (known ? '' : `<option value="" selected>Pick a course${selected ? ` (sent as “${esc(selected)}”)` : ''}</option>`) +
+    courseOptions(courses, selected);
+}
+
+function tipCard(t, profs, courses) {
+  const prof = profs.find((p) => p.id === t.profId);
+  const isNewProf = prof && prof.status === 'pending';
+  return `
+  <article class="q-card" data-tipcard="${esc(t.id)}">
+    <header>
+      <h3>About ${esc(prof ? prof.name : 'an unknown professor')}${isNewProf ? ' <span class="section-note">(new professor)</span>' : ''}</h3>
+      <p class="section-note">From ${esc(t.authorName || 'anonymous')}, ${esc(fmtTime(t.submittedAt))}</p>
+    </header>
+    <form class="q-form" data-form>
+      <label>Professor<select name="profId">${profOptions(profs, t.profId)}</select></label>
+      ${isNewProf ? `<label>Spelling of the new name<input name="profName" type="text" value="${esc(prof.name)}"></label>` : ''}
+      <label>Course<select name="course">${tipCourseOptions(courses, t.course)}</select></label>
+      <label>Year<input name="year" type="number" value="${esc(t.year)}"></label>
+      <label class="span">Tip<textarea name="text" rows="4">${esc(t.text)}</textarea></label>
+      <div class="q-actions span">
+        <button class="btn" type="button" data-approve>Approve</button>
+        <input name="reason" type="text" placeholder="Reason, if rejecting" aria-label="Reason for rejecting">
+        <button class="btn btn-danger" type="button" data-reject>Reject</button>
+      </div>
+      <p class="form-error span" data-err role="alert"></p>
+    </form>
+  </article>`;
+}
+
+function wireTipCard(card, tip, body, params) {
+  const f = card.querySelector('[data-form]');
+  const err = card.querySelector('[data-err]');
+  const decide = async (decision) => {
+    err.textContent = '';
+    if (decision === 'reject' && !f.reason.value.trim()) {
+      err.textContent = 'Write a short reason so the next mod knows why.';
+      f.reason.focus();
+      return;
+    }
+    if (decision === 'approve' && (!f.profId.value || !f.course.value)) {
+      err.textContent = 'Pick the professor and the course before approving.';
+      return;
+    }
+    const edits = { profId: f.profId.value, course: f.course.value, year: f.year.value, text: f.text.value.trim() };
+    if (decision === 'reject') { // keep what was sent when the lists had no match
+      if (!edits.profId) delete edits.profId;
+      if (!edits.course) delete edits.course;
+    }
+    if (f.profName && f.profId.value === tip.profId) edits.profName = f.profName.value.trim();
+    card.querySelectorAll('button').forEach((b) => { b.disabled = true; });
+    try {
+      await call('reviewTip', { id: tip.id, decision, reason: f.reason.value.trim(), edits });
+      clearCatalogCache();
+      card.outerHTML = `<p class="notice success">${decision === 'approve' ? 'Approved' : 'Rejected'} a tip.</p>`;
+    } catch (e) {
+      if (e.code === 401 || e.code === 403) return handleError(body.closest('main'), params, body, e);
+      err.textContent = e.message;
+      if (e.code === 409) setTimeout(() => tabQueue(body, params), 1500);
+      else card.querySelectorAll('button').forEach((b) => { b.disabled = false; });
+    }
+  };
+  card.querySelector('[data-approve]').addEventListener('click', () => decide('approve'));
+  card.querySelector('[data-reject]').addEventListener('click', () => decide('reject'));
 }
 
 function queueCard(it, courses) {
@@ -236,50 +318,10 @@ function wireQueueCard(card, item, catalog, body, params) {
   card.querySelector('[data-reject]').addEventListener('click', () => decide('reject').catch((e) => handleError(body.closest('main'), params, body, e)));
 }
 
-// ---------------- Start here ----------------
-
-async function tabStart(body, params) {
-  const catalog = await refreshCatalog();
-  const code = params.course && courseOf(catalog, params.course) ? params.course : catalog.courses[0]?.code;
-  if (!code) { body.innerHTML = '<p class="empty">No courses yet.</p>'; return; }
-  const items = catalog.items.filter((x) => x.course === code);
-  const page = coursePage(catalog.items, code);
-  const others = page.groups.flatMap((g) => g.items);
-  body.innerHTML = `
-    <label class="inline-label">Course <select data-course>${courseOptions(catalog.courses, code)}</select></label>
-    <h2><mark>Start here</mark></h2>
-    <p class="section-note">These show first on the course page, in this order. Keep it short: three to five things a junior should read first.</p>
-    ${page.startHere.length ? `<ol class="pick-list">${page.startHere.map((it, i) => `
-      <li><span>${esc(it.title)}</span>
-        <span class="pick-actions">
-          <button class="btn btn-small btn-quiet" data-act="up" data-id="${esc(it.id)}" ${i === 0 ? 'disabled' : ''} aria-label="Move ${esc(it.title)} up">↑</button>
-          <button class="btn btn-small btn-quiet" data-act="down" data-id="${esc(it.id)}" ${i === page.startHere.length - 1 ? 'disabled' : ''} aria-label="Move ${esc(it.title)} down">↓</button>
-          <button class="btn btn-small btn-quiet" data-act="remove" data-id="${esc(it.id)}">Remove</button>
-        </span></li>`).join('')}</ol>` : '<p class="empty">No picks yet. Add a few from the list below.</p>'}
-    <h2>Everything else</h2>
-    <ul class="pick-list">${others.map((it) => `
-      <li><span>${esc(it.title)} <span class="section-note">${esc(TYPE_LABELS[it.type])}</span></span>
-        <button class="btn btn-small" data-act="add" data-id="${esc(it.id)}">Add to Start here</button></li>`).join('')}</ul>
-    <p class="form-error" data-err role="alert"></p>`;
-  body.querySelector('[data-course]').addEventListener('change', (e) => { location.hash = `#/mod?tab=start&course=${e.target.value}`; });
-  body.querySelectorAll('[data-act]').forEach((b) => b.addEventListener('click', async () => {
-    body.querySelectorAll('[data-act]').forEach((x) => { x.disabled = true; });
-    try {
-      for (const ch of startHereChanges(items, b.dataset.id, b.dataset.act)) {
-        await call('update', { id: ch.id, edits: { startHere: ch.startHere, startOrder: ch.startOrder } });
-      }
-      await tabStart(body, { ...params, course: code });
-    } catch (e) {
-      if (e.code === 401 || e.code === 403) handleError(body.closest('main'), params, body, e);
-      else body.querySelector('[data-err]').textContent = e.message;
-    }
-  }));
-}
-
 // ---------------- Library ----------------
 
 async function tabLibrary(body, params) {
-  const [catalog, { items: live }] = await Promise.all([refreshCatalog(), call('library')]);
+  const [catalog, { items: live, tips = [], profs = [] }] = await Promise.all([refreshCatalog(), call('library')]);
   const q = params.q || '';
   const list = q ? search(live, catalog.courses, q) : [...live].sort((a, b) => String(b.reviewedAt).localeCompare(String(a.reviewedAt)));
   body.innerHTML = `
@@ -294,12 +336,27 @@ async function tabLibrary(body, params) {
         <div class="item-actions"><button class="btn btn-small btn-quiet" data-edit>Edit</button><button class="btn btn-small btn-danger" data-remove>Remove</button></div>
       </li>`;
     }).join('')}</ul>
-    ${list.length > 100 ? '<p class="section-note">Showing the first 100. Search to narrow it down.</p>' : ''}`;
+    ${list.length > 100 ? '<p class="section-note">Showing the first 100. Search to narrow it down.</p>' : ''}
+    <h2>Live professor tips <span class="group-count">${tips.length}</span></h2>
+    ${tips.length ? `<ul class="items">${[...tips].sort((a, b) => String(b.reviewedAt).localeCompare(String(a.reviewedAt))).slice(0, 100).map((t) => `
+      <li class="lib-item" data-tip="${esc(t.id)}">
+        <div><p class="tip-text">${esc(t.text)}</p>
+          <p class="item-meta">${esc(profs.find((p) => p.id === t.profId)?.name || '?')}, ${esc(courseOf(catalog, t.course)?.short || t.course)}${t.year ? ` ${esc(t.year)}` : ''}. Approved by ${esc(t.reviewedBy || '?')}${t.reviewedAt ? `, ${esc(fmtTime(t.reviewedAt))}` : ''}</p></div>
+        <div class="item-actions"><button class="btn btn-small btn-danger" data-removetip>Remove</button></div>
+      </li>`).join('')}</ul>` : '<p class="empty">No tips yet.</p>'}`;
+  body.querySelectorAll('[data-removetip]').forEach((b) => b.addEventListener('click', async () => {
+    const id = b.closest('[data-tip]').dataset.tip;
+    if (!confirm('Remove this tip from the site?')) return;
+    try {
+      await call('updateTip', { id, edits: { status: 'removed' } });
+      tabLibrary(body, params);
+    } catch (e) { alert(e.message); }
+  }));
   body.querySelector('[data-libsearch]').addEventListener('submit', (e) => {
     e.preventDefault();
     location.hash = '#/mod?tab=library&q=' + encodeURIComponent(e.target.q.value.trim());
   });
-  body.querySelectorAll('.lib-item').forEach((li) => {
+  body.querySelectorAll('.lib-item[data-id]').forEach((li) => { // file rows only; tip rows are wired above
     const it = list.find((x) => x.id === li.dataset.id);
     li.querySelector('[data-remove]').addEventListener('click', async () => {
       if (!confirm(`Remove “${it.title}” from the site? It moves to the Rejected folder in Drive, so it can be recovered.`)) return;
@@ -327,11 +384,54 @@ async function tabLibrary(body, params) {
   });
 }
 
+// ---------------- Professors ----------------
+
+async function tabProfs(body, params) {
+  const { profs = [] } = await call('library');
+  const sorted = [...profs].sort((a, b) => a.name.localeCompare(b.name));
+  body.innerHTML = `
+    <p class="section-note">Fix a misspelt name, or add a professor before anyone has written a tip. New names that students type show up as "(new)" until a tip about them is approved.</p>
+    <form class="inline-form" data-addprof>
+      <label>New professor<input name="name" type="text" maxlength="80" placeholder="Prof. A. K. Sharma" required></label>
+      <button class="btn">Add</button>
+    </form>
+    <p class="form-error" data-err role="alert"></p>
+    ${sorted.length ? `<ul class="pick-list">${sorted.map((p) => `
+      <li data-prof="${esc(p.id)}"><span>${esc(p.name)}${p.status === 'pending' ? ' <span class="section-note">(new)</span>' : ''}</span>
+        <span class="pick-actions"><button class="btn btn-small btn-quiet" data-rename>Rename</button>
+        <button class="btn btn-small btn-danger" data-removeprof>Remove</button></span></li>`).join('')}</ul>` : '<p class="empty">No professors yet.</p>'}`;
+  const err = body.querySelector('[data-err]');
+  const save = async (prof) => {
+    err.textContent = '';
+    try {
+      await call('saveProf', { prof });
+      clearCatalogCache();
+      tabProfs(body, params);
+    } catch (e) {
+      if (e.code === 401 || e.code === 403) return handleError(body.closest('main'), params, body, e);
+      err.textContent = e.message;
+    }
+  };
+  body.querySelector('[data-addprof]').addEventListener('submit', (e) => { e.preventDefault(); save({ name: e.target.name.value.trim() }); });
+  body.querySelectorAll('[data-rename]').forEach((b) => b.addEventListener('click', () => {
+    const li = b.closest('[data-prof]');
+    const prof = profs.find((p) => p.id === li.dataset.prof);
+    const name = prompt('Correct name for this professor:', prof.name);
+    if (name && name.trim() && name.trim() !== prof.name) save({ id: prof.id, name: name.trim() });
+  }));
+  body.querySelectorAll('[data-removeprof]').forEach((b) => b.addEventListener('click', () => {
+    const prof = profs.find((p) => p.id === b.closest('[data-prof]').dataset.prof);
+    if (confirm(`Remove ${prof.name}? Their page and tips stop showing on the site.`)) save({ id: prof.id, remove: true });
+  }));
+}
+
 // ---------------- Activity ----------------
 
 const ACTION_LABELS = {
   upload: 'uploaded', approve: 'approved', reject: 'rejected', edit: 'edited', remove: 'removed',
-  'start-here': 'changed Start here for', course: 'saved course', 'request-mod': 'asked to be a mod',
+  course: 'saved course', 'request-mod': 'asked to be a mod',
+  tip: 'sent a tip', 'approve-tip': 'approved a tip:', 'reject-tip': 'rejected a tip:', 'remove-tip': 'removed a tip:',
+  'edit-tip': 'edited a tip:', prof: 'saved professor', 'remove-prof': 'removed professor',
   'mod-add': 'made a mod:', 'mod-remove': 'removed mod', 'mod-decline': 'declined mod request from', 'seed-import': 'imported',
 };
 

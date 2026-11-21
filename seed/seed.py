@@ -2,8 +2,8 @@
 
   python seed/seed.py scan  "<semester folder>" --out seed/candidates.csv
       Lists every PDF/DOCX/PPTX worth sharing, with a guessed course, type, title and LaTeX source.
-      Open the CSV, set include=n on anything you don't want, fix courses and titles,
-      and set start_here=y on the few things a junior should read first.
+      Open the CSV, set include=n on anything you don't want, and fix courses, types and titles.
+      Types are the six course-page sections: book, slides, shortnotes, pyq, test, assignment.
 
   python seed/seed.py build seed/candidates.csv --root "<semester folder>" --staging seed/staging
       Copies the included files (and their .tex, or a .zip of .tex + figures) into staging/
@@ -21,12 +21,10 @@ import zipfile
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-CANDIDATE_COLUMNS = ['include', 'path', 'course', 'type', 'title', 'source', 'year', 'term', 'exam',
-                     'start_here', 'start_order']
-MANIFEST_COLUMNS = ['id', 'file', 'source_file', 'source_name', 'course', 'type', 'title', 'year', 'term', 'exam',
-                    'start_here', 'start_order']
+CANDIDATE_COLUMNS = ['include', 'path', 'course', 'type', 'title', 'source', 'year', 'term', 'exam']
+MANIFEST_COLUMNS = ['id', 'file', 'source_file', 'source_name', 'course', 'type', 'title', 'year', 'term', 'exam']
 FILE_EXTS = {'.pdf', '.docx', '.pptx'}
-ITEM_TYPES = {'notes', 'formula', 'pyq', 'lab', 'assignment', 'other'}
+ITEM_TYPES = {'book', 'slides', 'shortnotes', 'pyq', 'test', 'assignment'}  # same as apps-script/Catalog.js
 
 # Folder names skipped anywhere in the tree: code, build output, backups, figures, notes-app config.
 EXCLUDED_DIRS = {'sim', '__pycache__', '.obsidian', '_inbox', '_semvault', 'bin', 'out', 'exam_prep_code',
@@ -67,16 +65,21 @@ def guess_type(rel_path):
     low = rel_path.lower().replace('\\', '/')
     segs = low.split('/')
     folders = segs[:-1]
-    p = parse_pyq(segs[-1])
+    name = segs[-1]
+    p = parse_pyq(name)
+    # The six course-page sections: book, slides, shortnotes, pyq, test, assignment.
     if any(s in ('pyqs', 'pyq', 'endsem papers', 'endsems', 'midsems') for s in folders) or (p['course'] and p['exam']):
         return 'pyq'
-    if 'formula' in low:
-        return 'formula'
-    if 'assignment' in low:
+    if re.search(r'\b(text)?books?\b', low):
+        return 'book'
+    if re.search(r'practice[ _-]?papers?|class[ _-]?tests?|\bquiz|\btests?\b', low):
+        return 'test'
+    # Lab work (reports, viva guides) goes under Assignments of the lab course.
+    if 'assignment' in low or 'report' in name or any(re.search(r'(^|\s)lab(\s|$|\d)', s) for s in folders):
         return 'assignment'
-    if any(re.search(r'(^|\s)lab(\s|$|\d)', s) for s in folders):
-        return 'lab'
-    return 'notes'
+    if name.endswith('.pptx') or re.search(r'lect|slides?|class notes|\bppt\b', low):
+        return 'slides'
+    return 'shortnotes'  # formula sheets, summaries and explainers
 
 
 def find_source(pdf):
@@ -157,7 +160,6 @@ def scan_rows(root, conf):
             'include': 'n' if dup else 'y', 'path': rel, 'course': course, 'type': kind,
             'title': nice_title(f, shorts.get(course)), 'source': src.relative_to(root).as_posix() if src else '',
             'year': p['year'] or '', 'term': p['term'] or '', 'exam': p['exam'] or '',
-            'start_here': 'y' if kind == 'formula' else '', 'start_order': '',
         })
     return rows
 
@@ -184,7 +186,6 @@ def build(candidates, root, staging, conf):
     if staging.exists():
         shutil.rmtree(staging)
     staging.mkdir(parents=True)
-    next_order = {}
     manifest = []
     for r in rows:
         src_path = root / r['path']
@@ -203,16 +204,10 @@ def build(candidates, root, staging, conf):
             else:
                 source_file, source_name = iid + '.src' + tex.suffix.lower(), tex.name
                 shutil.copy2(tex, staging / source_file)
-        course = r['course'].strip().upper()
-        start = r.get('start_here', '').strip().lower() == 'y'
-        order = r.get('start_order', '').strip()
-        if start and not order:
-            next_order[course] = next_order.get(course, 0) + 1
-            order = str(next_order[course])
         manifest.append({
-            'id': iid, 'file': fname, 'source_file': source_file, 'source_name': source_name, 'course': course,
-            'type': r['type'].strip(), 'title': r['title'].strip(), 'year': r.get('year', ''), 'term': r.get('term', ''),
-            'exam': r.get('exam', ''), 'start_here': 'y' if start else '', 'start_order': order if start else '',
+            'id': iid, 'file': fname, 'source_file': source_file, 'source_name': source_name,
+            'course': r['course'].strip().upper(), 'type': r['type'].strip(), 'title': r['title'].strip(),
+            'year': r.get('year', ''), 'term': r.get('term', ''), 'exam': r.get('exam', ''),
         })
 
     with open(staging / 'manifest.csv', 'w', newline='', encoding='utf-8') as f:

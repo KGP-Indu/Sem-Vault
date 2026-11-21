@@ -5,8 +5,8 @@ import { uploadErrors, readBase64 } from '../lib/upload.js';
 import { esc } from './item.js';
 
 const TYPE_HELP = {
-  formula: 'Formula sheet', notes: 'Notes', pyq: 'Question paper', lab: 'Lab (reports, viva guides)',
-  assignment: 'Assignment', other: 'Something else',
+  book: 'Book', slides: 'PPT or class notes', shortnotes: 'Short notes or formulas', pyq: 'Question paper (PYQ)',
+  test: 'Class test or quiz', assignment: 'Assignment or lab report',
 };
 
 export function render(el, params, catalog) {
@@ -42,7 +42,7 @@ export function render(el, params, catalog) {
       <fieldset class="field">
         <legend>What is it?</legend>
         <div class="chips">
-          ${TYPE_ORDER.map((t, i) => `<label class="chip"><input type="radio" name="type" value="${t}"${i === 1 ? ' checked' : ''}><span>${TYPE_HELP[t]}</span></label>`).join('')}
+          ${TYPE_ORDER.map((t) => `<label class="chip"><input type="radio" name="type" value="${t}"${t === (TYPE_ORDER.includes(params.type) ? params.type : 'shortnotes') ? ' checked' : ''}><span>${TYPE_HELP[t]}</span></label>`).join('')}
         </div>
       </fieldset>
       <div class="field-row" data-pyq hidden>

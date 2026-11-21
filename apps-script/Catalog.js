@@ -7,9 +7,12 @@ var CATALOG_COLUMNS = [
   'startHere', 'startOrder', 'reviewedBy', 'reviewedAt', 'rejectReason',
 ];
 
-var ITEM_TYPES = ['notes', 'formula', 'pyq', 'lab', 'assignment', 'other'];
+// The six sections on every course page, in display order.
+var ITEM_TYPES = ['book', 'slides', 'shortnotes', 'pyq', 'test', 'assignment'];
+// Types used before revision 2, mapped when read back from the Sheet.
+var LEGACY_TYPES = { formula: 'shortnotes', notes: 'shortnotes', other: 'shortnotes', lab: 'assignment' };
 var MAX_BYTES = 25 * 1024 * 1024;
-var EDITABLE_FIELDS = ['title', 'description', 'course', 'type', 'year', 'term', 'exam', 'startHere', 'startOrder', 'status'];
+var EDITABLE_FIELDS = ['title', 'description', 'course', 'type', 'year', 'term', 'exam', 'status'];
 var PRIVATE_FIELDS = ['uploaderEmail', 'status', 'rejectReason', 'reviewedBy'];
 var MAX_TOTAL_BYTES = 35 * 1024 * 1024; // Apps Script refuses requests over ~50 MB; base64 adds a third.
 
@@ -19,7 +22,8 @@ function rowToItem(row) {
     var v = sheetUnsafe(row[i]);
     item[col] = v === undefined || v === null ? '' : v;
   });
-  item.startHere = item.startHere === true || String(item.startHere).toUpperCase() === 'TRUE';
+  item.startHere = item.startHere === true || String(item.startHere).toUpperCase() === 'TRUE'; // unused since revision 2
+  if (LEGACY_TYPES[item.type]) item.type = LEGACY_TYPES[item.type];
   item.year = toNumberOrBlank(item.year);
   item.startOrder = toNumberOrBlank(item.startOrder);
   ['uploadedAt', 'reviewedAt'].forEach(function (k) {
@@ -127,4 +131,21 @@ function sheetUnsafe(v) {
 
 function sheetSafeRow(row) {
   return row.map(sheetSafe);
+}
+
+// The name a file downloads under: its title, cleaned of characters Windows and phones refuse.
+function downloadName(title, ext) {
+  var base = String(title || '')
+    .replace(/[\\/:*?"<>|\x00-\x1f]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/[. ]+$/, '')
+    .slice(0, 120)
+    .trim();
+  return (base || 'file') + '.' + String(ext || 'pdf').toLowerCase();
+}
+
+function extOf(name, fallback) {
+  var m = /\.([A-Za-z0-9]{1,8})$/.exec(String(name || ''));
+  return m ? m[1].toLowerCase() : fallback;
 }

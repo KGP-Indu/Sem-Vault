@@ -109,3 +109,12 @@ Email via a third-party OTP/email service was also rejected: Apps Script's `Mail
 - Spam/abuse mitigation beyond moderation (e.g. simple rate limit, honeypot field).
 - Folder naming details and id format.
 - How the seeding script authenticates to Drive.
+
+## Revision 2 (2026-11-21, after first live test)
+
+Agreed with the owner after using the live site:
+
+1. **Download names follow the title.** Drive files are named `<title>.<ext>`; the source is `<title>.tex` / `<title>.zip`. Renamed when a mod edits the title. Seeded files are renamed on import.
+2. **Six sections on every course page:** Books, PPTs & class notes, Short notes & formulas, PYQs, Tests, Assignments (types `book`, `slides`, `shortnotes`, `pyq`, `test`, `assignment`). Each shows its count and opens on tap. Explainers count as Short notes & formulas. **Labs are separate courses** with the same sections (reports and viva guides go under Assignments). **"Start here" is removed.** Old types map on read: formula/notes/other → shortnotes, lab → assignment.
+3. **Professor pages.** A Professors list, and one page per prof with the courses they taught (with years, from approved tips) and student tips newest first. Course pages link their profs. Anyone submits a tip (prof or a new prof name, course, year, text, optional name); mods approve tips in the same queue; a new prof is confirmed when its first tip is approved. Written tips only, no star ratings. Sheet tabs `Profs` and `Tips`.
+4. **Speed.** The browser keeps the last catalog and shows it instantly, refreshing in the background (stale-while-revalidate); scripts are preloaded in parallel; the backend call starts at page load. A first visit is still ~2 s (Apps Script's floor).

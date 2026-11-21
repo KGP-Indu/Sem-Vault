@@ -1,32 +1,35 @@
 import { API_URL } from './config.js';
+import { createCatalogStore } from './lib/swr.js';
 
-const KEY = 'semvault:catalog';
-const TTL = 5 * 60 * 1000;
-
-export const previewMode = !API_URL;
+// ?preview in the address forces the sample data (for trying changes locally without the live backend).
+export const previewMode = !API_URL || new URLSearchParams(location.search).has('preview');
 // Dev only: with no server configured, localStorage 'semvault:mock' = '1' swaps in dev/mock-server.js.
 export const mockMode = previewMode && localStorage.getItem('semvault:mock') === '1';
 const mock = () => import('../dev/mock-server.js');
 
-export async function getCatalog({ fresh = false } = {}) {
-  if (mockMode) return (await mock()).catalog();
-  if (!fresh) {
-    const cached = sessionStorage.getItem(KEY);
-    if (cached) {
-      const { at, data } = JSON.parse(cached);
-      if (Date.now() - at < TTL) return data;
-    }
-  }
-  const url = API_URL ? `${API_URL}?action=catalog` : new URL('../dev/sample-catalog.json', import.meta.url);
+async function fetchCatalog() {
+  const url = previewMode ? new URL('../dev/sample-catalog.json', import.meta.url) : `${API_URL}?action=catalog`;
   const res = await fetch(url);
   const data = await res.json();
   if (data.ok === false) throw new Error(data.error);
-  sessionStorage.setItem(KEY, JSON.stringify({ at: Date.now(), data }));
   return data;
 }
 
+// Pages re-draw when a background refresh brings changes (see app.js).
+const store = createCatalogStore({
+  storage: localStorage,
+  fetchCatalog,
+  onUpdate: (data) => window.dispatchEvent(new CustomEvent('catalog-updated', { detail: data })),
+});
+
+export async function getCatalog({ fresh = false } = {}) {
+  if (mockMode) return (await mock()).catalog();
+  if (previewMode) return fetchCatalog(); // sample data: never mix it into the saved copy
+  return store.get({ fresh });
+}
+
 export function clearCatalogCache() {
-  sessionStorage.removeItem(KEY);
+  store.clear();
 }
 
 export async function post(action, body = {}) {
@@ -38,7 +41,7 @@ export async function post(action, body = {}) {
       data = { ok: false, error: e.message, code: e.code };
     }
   } else {
-    if (!API_URL) throw new Error('Preview mode: not connected to the server yet');
+    if (previewMode) throw new Error('Preview mode: not connected to the server yet');
     const res = await fetch(API_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // avoids a CORS preflight Apps Script can't answer

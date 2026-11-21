@@ -77,7 +77,7 @@ test('#6 file plus source over 35 MB together is blocked in the browser', () => 
 test('#6 server refuses file plus source over 35 MB together', () => {
   const g = loadGas('Catalog.js');
   const b64 = (mb) => 'A'.repeat(Math.ceil(mb * 1024 * 1024 * 4 / 3));
-  const r = g.validateUpload({ course: 'IM31005', type: 'notes', title: 't' }, { name: 'a.pdf', base64: b64(20) }, { name: 'a.zip', base64: b64(20) });
+  const r = g.validateUpload({ course: 'IM31005', type: 'slides', title: 't' }, { name: 'a.pdf', base64: b64(20) }, { name: 'a.zip', base64: b64(20) });
   assert.equal(r.ok, false);
   assert.ok(r.errors.some((x) => x.includes('35 MB')));
 });
@@ -90,4 +90,17 @@ test('#4 reading a row back removes the protective apostrophe', () => {
   assert.equal(it.description, '-dash');
   assert.equal(g.sheetUnsafe("'@x"), '@x');
   assert.equal(g.sheetUnsafe("it's fine"), "it's fine");
+});
+
+test('#R2-1 before setup() adds the Profs and Tips tabs, reading them gives empty lists instead of an error', () => {
+  const tabs = { Catalog: [['id']] }; // a Sheet from before revision 2
+  const sheet = (rows) => ({ getLastRow: () => rows.length, getRange: () => ({ getValues: () => rows.slice(1) }) });
+  const ctx = vm.createContext({
+    PropertiesService: { getScriptProperties: () => ({ getProperties: () => ({ SHEET_ID: 'x' }) }) },
+    SpreadsheetApp: { openById: () => ({ getSheetByName: (n) => (tabs[n] ? sheet(tabs[n]) : null) }) },
+  });
+  for (const f of ['Catalog.js', 'Profs.js', 'Store.js']) vm.runInContext(readFileSync(new URL(f, gasDir), 'utf8'), ctx);
+  assert.deepEqual([...ctx.readProfs()], []);
+  assert.deepEqual([...ctx.readTips()], []);
+  assert.throws(() => ctx.readCourses(), /Run setup/); // required tabs still say what to do
 });

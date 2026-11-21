@@ -1,7 +1,5 @@
 // Shared rendering helpers for item rows.
-import { driveUrls } from '../lib/catalog.js';
-
-const SINGULAR = { formula: 'Formula sheet', notes: 'Notes', lab: 'Lab', assignment: 'Assignment', other: 'Other' };
+import { driveUrls, TYPE_SINGULAR } from '../lib/catalog.js';
 
 export const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 
@@ -10,7 +8,7 @@ export function courseOf(catalog, code) {
 }
 
 function meta(item) {
-  if (item.type !== 'pyq') return SINGULAR[item.type] || '';
+  if (item.type !== 'pyq') return TYPE_SINGULAR[item.type] || '';
   const exam = { midsem: 'Midsem', endsem: 'Endsem' }[item.exam] || 'Question paper';
   return [exam, item.term, item.year].filter(Boolean).join(' ');
 }

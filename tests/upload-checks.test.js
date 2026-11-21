@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { uploadErrors, MAX_BYTES } from '../site/js/lib/upload.js';
 
-const ok = { title: 'Notes', course: 'IM31005', type: 'notes', file: { name: 'a.pdf', size: 1000 }, source: null };
+const ok = { title: 'Notes', course: 'IM31005', type: 'slides', file: { name: 'a.pdf', size: 1000 }, source: null };
 
 test('a valid upload has no errors', () => {
   assert.deepEqual(uploadErrors(ok), {});

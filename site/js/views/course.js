@@ -1,4 +1,5 @@
 import { coursePage, TYPE_LABELS } from '../lib/catalog.js';
+import { profsForCourse } from '../lib/profs.js';
 import { esc, itemRow, courseOf } from './item.js';
 
 export function render(el, params, catalog) {
@@ -8,24 +9,22 @@ export function render(el, params, catalog) {
     return;
   }
   const page = coursePage(catalog.items, course.code);
-  const total = page.startHere.length + page.groups.reduce((n, g) => n + g.items.length, 0);
+  const profs = profsForCourse(catalog.tips || [], catalog.profs || [], course.code);
   el.innerHTML = `
     <nav class="crumbs"><a href="#/sem/${course.semester}">Semester ${course.semester}</a></nav>
     <h1 class="course-title">${esc(course.name)}</h1>
-    <p class="course-sub">${esc(course.code)}, ${total} file${total === 1 ? '' : 's'}</p>
-    ${total === 0 ? `<p class="empty">Nothing here yet. If you have notes or papers for this course, <a href="#/upload?course=${esc(course.code)}">upload them</a>.</p>` : ''}
-    ${page.startHere.length ? `
-      <section class="start-here">
-        <h2><mark>Start here</mark></h2>
-        <p class="section-note">Picked by mods. Read these first.</p>
-        <ul class="items">${page.startHere.map((i) => itemRow(i)).join('')}</ul>
-      </section>` : ''}
-    ${page.groups.map((g) => `
-      <details class="group">
-        <summary><span>${TYPE_LABELS[g.type]}</span><span class="group-count">${g.items.length}</span></summary>
-        <ul class="items">${g.items.map((i) => itemRow(i)).join('')}</ul>
+    <p class="course-sub">${esc(course.code)}, ${page.total} file${page.total === 1 ? '' : 's'}</p>
+    ${profs.length ? `<p class="course-profs">Taught by ${profs.map((p) =>
+      `<a href="#/prof/${esc(p.id)}">${esc(p.name)}</a> <span class="section-note">(${esc(p.years.join(', '))})</span>`).join(', ')}.
+      <a href="#/profs">Tips on profs</a></p>` : ''}
+    <div class="sections">
+    ${page.sections.map((s) => `
+      <details class="group" data-type="${s.type}"${s.items.length ? '' : ' data-empty'}>
+        <summary><span>${TYPE_LABELS[s.type]}</span><span class="group-count">${s.items.length}</span></summary>
+        ${s.items.length
+          ? `<ul class="items">${s.items.map((i) => itemRow(i)).join('')}</ul>`
+          : `<p class="empty">Nothing here yet. Have some? <a href="#/upload?course=${esc(course.code)}&type=${s.type}">Upload it</a>.</p>`}
       </details>`).join('')}
+    </div>
   `;
-  // With no picks, open the first group so the page isn't a wall of closed boxes.
-  if (!page.startHere.length) el.querySelector('details.group')?.setAttribute('open', '');
 }

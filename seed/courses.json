@@ -1,5 +1,5 @@
 {
-  "_help": "courses: shown on the site. folders: a folder (or file) path in the semester folder -> course code; the longest match wins. Fill in any code left blank.",
+  "_help": "courses: shown on the site. folders: a folder (or file) path in the semester folder -> course code; the longest match wins. Labs are separate courses: add each lab course (code, name, short, semester) under courses, then put its code against its folders. Fill in any code left blank.",
   "courses": [
     { "code": "IM21203", "name": "Engineering Economy", "short": "EngEco", "semester": 5 },
     { "code": "IM31005", "name": "Quality Design and Control", "short": "QDC", "semester": 5 },
@@ -11,11 +11,11 @@
     "EE": "IM21203",
     "Notes/EE": "IM21203",
     "QDC": "IM31005",
-    "QDC Lab": "IM31005",
-    "QDC Lab All Exps": "IM31005",
+    "QDC Lab": "",
+    "QDC Lab All Exps": "",
     "Simulation": "IM31006",
     "Simulation_Notes.pdf": "IM31006",
-    "simulation lab": "IM31006",
+    "simulation lab": "",
     "SCM": "IM31201",
     "HPSC": "CD61002",
     "stochastic": ""

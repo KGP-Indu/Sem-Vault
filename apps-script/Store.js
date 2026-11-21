@@ -8,7 +8,27 @@ function tabColumns(name) {
   Mods: ['email', 'addedBy', 'addedAt'],
   Requests: ['email', 'requestedAt'],
   Log: ['at', 'actor', 'action', 'target', 'detail'],
+  Profs: PROF_COLUMNS,
+  Tips: TIP_COLUMNS,
   }[name];
+}
+
+// ---- Professors and tips ----
+
+// Profs and Tips were added in revision 2. Until setup() is re-run they don't exist; treat that as "none yet"
+// so the catalog, mod queue and digest keep working instead of taking the whole site down.
+function optionalTabExists(name) {
+  return !!SpreadsheetApp.openById(props().SHEET_ID).getSheetByName(name);
+}
+function readProfs() { return optionalTabExists('Profs') ? readRows('Profs').map(rowToProf) : []; }
+function readTips() { return optionalTabExists('Tips') ? readRows('Tips').map(rowToTip) : []; }
+function writeProf(prof) { upsertRow('Profs', prof.id, profToRow(prof).map(String)); }
+function writeTip(tip) { upsertRow('Tips', tip.id, tipToRow(tip).map(String)); }
+
+function findTip(id) {
+  var tips = readTips();
+  for (var i = 0; i < tips.length; i++) if (tips[i].id === id) return tips[i];
+  return null;
 }
 
 function props() {
@@ -150,6 +170,16 @@ function moveFiles(item, folder, shareWithLink) {
     f.moveTo(folder);
     if (shareWithLink) f.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
     else f.setSharing(DriveApp.Access.PRIVATE, DriveApp.Permission.NONE);
+  });
+}
+
+// Names the Drive files after the item's title, keeping each file's extension, so downloads match the site.
+function renameFiles(item) {
+  [item.fileId, item.sourceFileId].forEach(function (id) {
+    if (!id) return;
+    var f = DriveApp.getFileById(id);
+    var want = downloadName(item.title, extOf(f.getName(), 'pdf'));
+    if (f.getName() !== want) f.setName(want);
   });
 }
 

@@ -1,6 +1,6 @@
 # Sem Vault
 
-A free, student-run library for the IM department at IIT Kharagpur. You browse it by **semester → course**. Each course page opens with a short **Start here** list picked by mods, and everything else sits below it. Anyone can upload. A mod approves each upload before it goes public. Claude-made PDFs come with their LaTeX source, so the next person's AI agent can edit them instead of starting from scratch.
+A free, student-run library for the IM department at IIT Kharagpur. You browse it by **semester → course**. Every course page has the same six sections: **Books**, **PPTs & class notes**, **Short notes & formulas**, **PYQs**, **Tests** and **Assignments**. Labs are courses of their own. A **Professors** section collects students' tips on how each prof teaches and grades. Anyone can upload. A mod approves each upload before it goes public. Claude-made PDFs come with their LaTeX source, so the next person's AI agent can edit them instead of starting from scratch.
 
 - **Site:** static pages in `site/`, hosted free on GitHub Pages.
 - **Backend:** a Google Apps Script in `apps-script/`. It stores files in Google Drive and the catalog in a Google Sheet, both owned by **kgp.indu@gmail.com**.
@@ -91,8 +91,7 @@ You need Python 3. Run these from this folder.
    - Course codes come from `seed/courses.json` (folder → code). Add new folders and courses there.
 2. **Trim the list.** Open `seed/candidates.csv` in Excel or Google Sheets. This step is what keeps the site from becoming an overwhelming dump:
    - Set `include` to `n` for anything a junior doesn't need: drafts, duplicates, project dumps, personal stuff.
-   - Fix `course`, `type` (`notes`, `formula`, `pyq`, `lab`, `assignment`, `other`) and `title`.
-   - Put `y` in `start_here` on the 3–5 things per course a junior should read first. Use `start_order` to set their order.
+   - Fix `course`, `title` and `type`. The type is the course-page section: `book`, `slides` (PPTs and class notes), `shortnotes` (short notes, formulas, explainers), `pyq`, `test` or `assignment` (lab reports go here, under the lab course).
    - Save as CSV.
 3. **Build the upload folder:**
    ```powershell
@@ -103,16 +102,17 @@ You need Python 3. Run these from this folder.
    - If it stops at the 6-minute limit, just run it again. Items that were already imported are skipped.
    - After that, empty the `Seed` folder.
 
-For Sem 5, `seed/courses.json` already maps EE, QDC, QDC Lab, Simulation, Simulation Lab, SCM and HPSC. **`stochastic` has no course code yet.** Fill it in before building.
+For Sem 5, `seed/courses.json` already maps EE, QDC, Simulation, SCM and HPSC. **Still missing:** the course codes for `stochastic` and for the two labs (QDC Lab, Simulation Lab). Labs are separate courses: add each lab to `courses` in `seed/courses.json` (code, name, short name, semester) and put its code against its folders, then re-run `scan`.
 
 ---
 
 ## Day to day
 
-- **Mods** get the digest email when uploads are waiting. In the **Mod panel**:
+- **Mods** get the digest email when uploads or professor tips are waiting. In the **Mod panel**:
   - **Queue**: fix the title or course and approve, or reject with a reason. Uploads for a course that isn't listed need **Add a new course…** first.
-  - **Start here**: choose and order the first-read list for each course.
-  - **Library**: edit or remove live files. Removed files go to `Rejected/` in Drive, so they can be recovered.
+  - **Queue** also holds **professor tips**: fix the wording, professor, course or year and approve, or reject with a reason. Approving the first tip about a professor a student typed in also adds that professor; fix the spelling of the name before approving.
+  - **Library**: edit or remove live files and live tips. Removed files go to `Rejected/` in Drive, so they can be recovered. Changing a title renames the file in Drive too, so downloads keep matching.
+  - **Professors**: add a professor, or fix a misspelt name.
   - **Activity**: who did what, newest first.
 - **Owner** (kgp.indu@gmail.com) also gets the **Mods** tab, for approving mod requests and adding or removing mods.
 - The Sheet is the source of truth, and mods can fix things in it directly. **Don't edit the `Log` tab.**
@@ -129,9 +129,9 @@ If ownership ever has to move to a *different* Google account, transfer the Driv
 
 - Tests: `npm test` (backend logic and site logic) and `python -m pytest seed` (seeding script).
 - Try the site locally with `python -m http.server 5173 -d site`, then open <http://localhost:5173>.
-  - With `API_URL` empty, it uses `site/dev/sample-catalog.json`.
-  - To try the mod panel without a server, run `localStorage.setItem('semvault:mock','1')` in the browser console and reload. Sign in as `kgp.indu@gmail.com` (owner) or `mod@example.com` (mod).
-- Backend change: `cd apps-script; npx @google/clasp push`. Then go to **Deploy → Manage deployments → ✎ → Version: New version → Deploy**. The URL stays the same.
+  - Add `?preview` to the address (<http://localhost:5173/?preview>) to use `site/dev/sample-catalog.json` instead of the live backend. With `API_URL` empty it does that anyway.
+  - To try the mod panel without a server, open the site with `?preview`, run `localStorage.setItem('semvault:mock','1')` in the browser console and reload. Sign in as `kgp.indu@gmail.com` (owner) or `mod@example.com` (mod).
+- Backend change: `cd apps-script; npx @google/clasp push`. Then go to **Deploy → Manage deployments → ✎ → Version: New version → Deploy**. The URL stays the same. If the change adds Sheet tabs (as revision 2 did with `Profs` and `Tips`), run **`setup`** once more too; it only adds what is missing.
 - Site change: push to `main`.
 
 ## Limits worth knowing

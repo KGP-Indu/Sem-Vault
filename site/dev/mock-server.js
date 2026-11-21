@@ -14,9 +14,13 @@ async function load() {
   const items = base.items.map((x) => ({ ...x, status: 'approved', uploaderEmail: '', rejectReason: '' }));
   items.push(
     { id: 'p1', course: 'IM31005', type: 'pyq', title: 'QDC midsem 2025', description: '', fileId: 'sample-p1', sourceFileId: '', sourceName: '', year: 2025, term: 'autumn', exam: 'midsem', uploaderName: 'A junior', uploaderEmail: 'junior@example.com', uploadedAt: '2026-11-21T03:00:00.000Z', status: 'pending', startHere: false, startOrder: '', reviewedBy: '', reviewedAt: '', rejectReason: '' },
-    { id: 'p2', course: 'OTHER:Ergonomics IM31010', type: 'notes', title: 'Ergonomics crash notes', description: 'Anthropometry and work design', fileId: 'sample-p2', sourceFileId: 'sample-p2s', sourceName: 'ergo.tex', year: '', term: '', exam: '', uploaderName: '', uploaderEmail: '', uploadedAt: '2026-11-21T05:00:00.000Z', status: 'pending', startHere: false, startOrder: '', reviewedBy: '', reviewedAt: '', rejectReason: '' },
+    { id: 'p2', course: 'OTHER:Ergonomics IM31010', type: 'shortnotes', title: 'Ergonomics crash notes', description: 'Anthropometry and work design', fileId: 'sample-p2', sourceFileId: 'sample-p2s', sourceName: 'ergo.tex', year: '', term: '', exam: '', uploaderName: '', uploaderEmail: '', uploadedAt: '2026-11-21T05:00:00.000Z', status: 'pending', startHere: false, startOrder: '', reviewedBy: '', reviewedAt: '', rejectReason: '' },
   );
-  state = { courses: base.courses, items, mods: [{ email: 'mod@example.com', addedBy: OWNER, addedAt: '2026-11-20T00:00:00.000Z' }], requests: [{ email: 'wannabe@example.com', requestedAt: '2026-11-21T02:00:00.000Z' }], log: [] };
+  const profs = base.profs.map((x) => ({ ...x, status: 'approved', addedBy: OWNER, addedAt: '2026-11-01T00:00:00.000Z' }));
+  profs.push({ id: 'pf_new1', name: 'Dr C Newname', dept: 'IM', status: 'pending', addedBy: 'student', addedAt: '2026-11-21T04:00:00.000Z' });
+  const tips = base.tips.map((x) => ({ ...x, status: 'approved', reviewedBy: OWNER, reviewedAt: x.submittedAt, rejectReason: '' }));
+  tips.push({ id: 'tp_p1', profId: 'pf_new1', course: 'IM31005', year: 2026, text: 'Takes surprise quizzes in the first ten minutes, so come on time.', authorName: '', submittedAt: '2026-11-21T04:00:00.000Z', status: 'pending', reviewedBy: '', reviewedAt: '', rejectReason: '' });
+  state = { courses: base.courses, items, profs, tips, mods: [{ email: 'mod@example.com', addedBy: OWNER, addedAt: '2026-11-20T00:00:00.000Z' }], requests: [{ email: 'wannabe@example.com', requestedAt: '2026-11-21T02:00:00.000Z' }], log: [] };
   return state;
 }
 
@@ -41,7 +45,12 @@ const find = (id) => state.items.find((x) => x.id === id) || fail('Item not foun
 export async function catalog() {
   await load();
   const strip = ({ uploaderEmail, status, rejectReason, reviewedBy, ...rest }) => rest;
-  return { ok: true, courses: state.courses, items: state.items.filter((x) => x.status === 'approved').map(strip), updatedAt: new Date().toISOString() };
+  const tipOut = ({ status, reviewedBy, reviewedAt, rejectReason, ...rest }) => rest;
+  return {
+    ok: true, courses: state.courses, items: state.items.filter((x) => x.status === 'approved').map(strip),
+    profs: state.profs.filter((p) => p.status === 'approved').map(({ id, name, dept }) => ({ id, name, dept })),
+    tips: state.tips.filter((t) => t.status === 'approved').map(tipOut), updatedAt: new Date().toISOString(),
+  };
 }
 
 export async function handle(action, body) {
@@ -49,7 +58,7 @@ export async function handle(action, body) {
   const out = (() => {
     switch (action) {
       case 'me': return { email: String(body.idToken).toLowerCase(), role: role(body.idToken) };
-      case 'pending': need(body, 'mod'); return { items: state.items.filter((x) => x.status === 'pending').map((x) => ({ ...x, fileUrl: '#', sourceUrl: x.sourceFileId ? '#' : '' })) };
+      case 'pending': need(body, 'mod'); return { items: state.items.filter((x) => x.status === 'pending').map((x) => ({ ...x, fileUrl: '#', sourceUrl: x.sourceFileId ? '#' : '' })), tips: state.tips.filter((t) => t.status === 'pending'), profs: state.profs.filter((p) => p.status !== 'removed') };
       case 'review': {
         const me = need(body, 'mod');
         const it = find(body.id);
@@ -76,7 +85,50 @@ export async function handle(action, body) {
         log(me, 'course', c.code, c.name);
         return { courses: state.courses };
       }
-      case 'library': need(body, 'mod'); return { items: state.items.filter((x) => x.status === 'approved') };
+      case 'library': need(body, 'mod'); return { items: state.items.filter((x) => x.status === 'approved'), tips: state.tips.filter((t) => t.status === 'approved'), profs: state.profs.filter((p) => p.status !== 'removed') };
+      case 'submitTip': {
+        const t = body.tip;
+        let profId = t.profId;
+        if (!profId) {
+          profId = 'pf_' + Date.now();
+          state.profs.push({ id: profId, name: t.newProfName, dept: 'IM', status: 'pending', addedBy: 'student', addedAt: new Date().toISOString() });
+        }
+        state.tips.push({ id: 'tp_' + Date.now(), profId, course: t.course, year: Number(t.year) || '', text: t.text, authorName: t.authorName, submittedAt: new Date().toISOString(), status: 'pending', reviewedBy: '', reviewedAt: '', rejectReason: '' });
+        return { id: 'ok' };
+      }
+      case 'reviewTip': {
+        const me = need(body, 'mod');
+        const t = state.tips.find((x) => x.id === body.id) || fail('Tip not found', 404);
+        if (t.status !== 'pending') fail('Already reviewed by ' + t.reviewedBy, 409);
+        const { profName, ...edits } = body.edits || {};
+        Object.assign(t, edits, { year: Number(edits.year) || '' });
+        if (body.decision === 'reject' && !String(body.reason || '').trim()) fail('A reason is required to reject');
+        if (body.decision === 'approve') {
+          const prof = state.profs.find((p) => p.id === t.profId);
+          prof.status = 'approved';
+          if (profName) prof.name = profName;
+        }
+        Object.assign(t, { status: body.decision === 'approve' ? 'approved' : 'rejected', reviewedBy: me, reviewedAt: new Date().toISOString(), rejectReason: body.reason || '' });
+        log(me, body.decision + '-tip', t.id, t.text.slice(0, 60));
+        return { tip: t };
+      }
+      case 'updateTip': {
+        const me = need(body, 'mod');
+        const t = state.tips.find((x) => x.id === body.id) || fail('Tip not found', 404);
+        if (body.edits.status === 'removed') t.status = 'removed';
+        log(me, 'remove-tip', t.id, t.text.slice(0, 60));
+        return { tip: t };
+      }
+      case 'saveProf': {
+        const me = need(body, 'mod');
+        const p = body.prof;
+        let prof = p.id && state.profs.find((x) => x.id === p.id);
+        if (!prof) { prof = { id: 'pf_' + Date.now(), dept: 'IM', addedBy: me, addedAt: new Date().toISOString() }; state.profs.push(prof); }
+        if (p.remove) prof.status = 'removed';
+        else Object.assign(prof, { name: p.name, status: prof.status || 'approved' });
+        log(me, 'prof', prof.id, prof.name);
+        return { prof, profs: state.profs };
+      }
       case 'activity': need(body, 'mod'); return { rows: state.log.slice(-(body.limit || 200)).reverse() };
       case 'requestMod': {
         const me = String(body.idToken).toLowerCase();

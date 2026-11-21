@@ -17,7 +17,7 @@ function setup() {
     DriveApp.getFileById(ss.getId()).moveTo(root);
     store.setProperty('SHEET_ID', ss.getId());
   }
-  ['Catalog', 'Courses', 'Mods', 'Requests', 'Log'].forEach(function (name) {
+  ['Catalog', 'Courses', 'Mods', 'Requests', 'Log', 'Profs', 'Tips'].forEach(function (name) {
     var sh = ss.getSheetByName(name) || ss.insertSheet(name);
     var cols = tabColumns(name);
     // Plain text everywhere so Sheets never reformats ids, dates or codes.
@@ -41,12 +41,18 @@ function setup() {
     ScriptApp.newTrigger('sendDigest').timeBased().atHour(h).everyDays(1).inTimezone('Asia/Kolkata').create();
   });
 
+  bustCache(); // so the site picks up new tabs and data straight away
   Logger.log('Setup done. Folder: %s  Sheet: %s', root.getUrl(), ss.getUrl());
 }
 
 // Time trigger, 8 am and 9 pm IST. Mails only when something is still pending.
 function sendDigest() {
   var pending = readItems().filter(function (it) { return it.status === 'pending'; });
+  readTips().forEach(function (t) {
+    if (t.status === 'pending') {
+      pending.push({ title: 'Prof tip: ' + String(t.text).slice(0, 50), course: t.course, uploadedAt: t.submittedAt });
+    }
+  });
   var d = buildDigest(pending, readCourses(), props().SITE_URL + '#/mod', new Date().toISOString());
   if (!d) return;
   var to = modEmails().concat([props().OWNER_EMAIL]).filter(function (e, i, all) {
@@ -68,6 +74,23 @@ function csvObjects(file) {
 function fileInFolder(folder, name) {
   var it = folder.getFilesByName(name);
   return it.hasNext() ? it.next() : null;
+}
+
+// Run once after deploying revision 2: renames every live file after its title, so downloads stop being
+// called it_xxxx.pdf. Safe to re-run; it stops before the 6-minute limit and picks up where it left off.
+function renameLiveFiles() {
+  var started = Date.now();
+  var done = 0;
+  var items = readItems().filter(function (it) { return it.status === 'approved'; });
+  for (var i = 0; i < items.length; i++) {
+    if (Date.now() - started > 4.5 * 60 * 1000) {
+      Logger.log('Renamed %s of %s. Run renameLiveFiles() again to finish.', done, items.length);
+      return;
+    }
+    renameFiles(items[i]); // skips files whose name is already right
+    done++;
+  }
+  Logger.log('All %s live files are named after their titles.', done);
 }
 
 // Imports seed/staging (dragged into Drive's Sem Vault/Seed folder) as approved items.
@@ -110,7 +133,7 @@ function importSeed() {
         fileId: f.getId(), sourceFileId: src ? src.getId() : '', sourceName: src ? (r.source_name || r.source_file) : '',
         year: Number(r.year) || '', term: r.term, exam: r.exam, uploaderName: 'seed', uploaderEmail: '',
         uploadedAt: new Date().toISOString(), status: 'approved',
-        startHere: String(r.start_here).toLowerCase() === 'y', startOrder: Number(r.start_order) || '',
+        startHere: false, startOrder: '', // Start here was removed in revision 2
         reviewedBy: 'seed', reviewedAt: new Date().toISOString(), rejectReason: '',
       };
       writeItem(item); // row first: if the run is cut off now, the next run sees it and finishes the move
@@ -119,6 +142,7 @@ function importSeed() {
       finished++;
     }
     moveFiles(item, liveFolder(item.course), true);
+    renameFiles(item); // staging files are named by id; downloads should be named by title
   }
   appendLog(logRow(props().OWNER_EMAIL, 'seed-import', '', added + ' items', new Date().toISOString()));
   bustCache();

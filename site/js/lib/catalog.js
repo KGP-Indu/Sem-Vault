@@ -1,9 +1,15 @@
 // Pure helpers for shaping the public catalog into pages.
 
-export const TYPE_ORDER = ['formula', 'notes', 'pyq', 'lab', 'assignment', 'other'];
+// The six sections on every course page, in order (same as ITEM_TYPES in apps-script/Catalog.js).
+export const TYPE_ORDER = ['book', 'slides', 'shortnotes', 'pyq', 'test', 'assignment'];
 export const TYPE_LABELS = {
-  formula: 'Formula sheets', notes: 'Notes', pyq: 'Question papers',
-  lab: 'Lab', assignment: 'Assignments', other: 'Other',
+  book: 'Books', slides: 'PPTs & class notes', shortnotes: 'Short notes & formulas',
+  pyq: 'PYQs', test: 'Tests', assignment: 'Assignments',
+};
+// One item of each kind, for labels like "Formula sheet" under a title.
+export const TYPE_SINGULAR = {
+  book: 'Book', slides: 'Slides / class notes', shortnotes: 'Short notes', pyq: 'Question paper',
+  test: 'Test', assignment: 'Assignment',
 };
 
 export function semesters(courses) {
@@ -18,16 +24,17 @@ export function semesters(courses) {
   }));
 }
 
-const orderKey = (x) => (x.startOrder === '' || x.startOrder == null ? Infinity : Number(x.startOrder));
+const byYearThenTitle = (a, b) => (Number(b.year) || 0) - (Number(a.year) || 0)
+  || String(a.title).localeCompare(String(b.title));
 
+// Every course page shows all six sections, empty ones included, so people know where things go.
 export function coursePage(items, code) {
   const mine = items.filter((x) => x.course === code);
-  const startHere = mine.filter((x) => x.startHere).sort((a, b) => orderKey(a) - orderKey(b));
-  const rest = mine.filter((x) => !x.startHere);
-  const groups = TYPE_ORDER
-    .map((type) => ({ type, items: rest.filter((x) => x.type === type) }))
-    .filter((g) => g.items.length > 0);
-  return { startHere, groups };
+  const sections = TYPE_ORDER.map((type) => ({
+    type,
+    items: mine.filter((x) => x.type === type).sort(byYearThenTitle),
+  }));
+  return { sections, total: mine.length };
 }
 
 export function filterPyqs(items, f) {

@@ -1,33 +1,39 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { semesters, coursePage, filterPyqs, search, driveUrls } from '../site/js/lib/catalog.js';
+import { semesters, coursePage, filterPyqs, search, driveUrls, TYPE_ORDER, TYPE_LABELS } from '../site/js/lib/catalog.js';
 
 const courses = [
   { code: 'IM31005', name: 'Quality Design and Control', short: 'QDC', semester: 5 },
   { code: 'IM21203', name: 'Engineering Economy', short: 'EngEco', semester: 4 },
   { code: 'IM31003', name: 'Supply Chain Management', short: 'SCM', semester: 5 },
 ];
-const it = (id, extra) => ({ id, course: 'IM31005', type: 'notes', title: id, description: '', startHere: false, startOrder: '', ...extra });
+const it = (id, extra) => ({ id, course: 'IM31005', type: 'shortnotes', title: id, description: '', year: '', ...extra });
 
 test('semesters groups courses ascending, courses sorted by code', () => {
   assert.deepEqual(semesters(courses).map((s) => [s.semester, s.courses.map((c) => c.code)]),
     [[4, ['IM21203']], [5, ['IM31003', 'IM31005']]]);
 });
 
-test('coursePage orders start-here by startOrder with blanks last', () => {
-  const items = [it('c', { startHere: true }), it('b', { startHere: true, startOrder: 2 }), it('a', { startHere: true, startOrder: 1 })];
-  assert.deepEqual(coursePage(items, 'IM31005').startHere.map((x) => x.id), ['a', 'b', 'c']);
+test('the six sections have the agreed names, in order', () => {
+  assert.deepEqual(TYPE_ORDER.map((t) => TYPE_LABELS[t]),
+    ['Books', 'PPTs & class notes', 'Short notes & formulas', 'PYQs', 'Tests', 'Assignments']);
 });
 
-test('coursePage groups the rest by type order and omits empty groups', () => {
-  const items = [it('n'), it('p', { type: 'pyq' }), it('f', { type: 'formula' }), it('x', { course: 'IM31003', type: 'lab' })];
-  const page = coursePage(items, 'IM31005');
-  assert.deepEqual(page.groups.map((g) => g.type), ['formula', 'notes', 'pyq']);
-  assert.deepEqual(page.startHere, []);
+test('coursePage always lists all six sections, even empty ones', () => {
+  const page = coursePage([it('p', { type: 'pyq' })], 'IM31005');
+  assert.deepEqual(page.sections.map((s) => [s.type, s.items.length]),
+    [['book', 0], ['slides', 0], ['shortnotes', 0], ['pyq', 1], ['test', 0], ['assignment', 0]]);
+  assert.equal(page.total, 1);
+});
+
+test('coursePage sorts each section newest year first, then by title', () => {
+  const items = [it('b'), it('a'), it('old', { year: 2022 }), it('new', { year: 2025 })];
+  assert.deepEqual(coursePage(items, 'IM31005').sections[2].items.map((x) => x.id), ['new', 'old', 'a', 'b']);
 });
 
 test('coursePage never shows items from other courses', () => {
-  assert.equal(coursePage([it('x', { course: 'IM31003' })], 'IM31005').groups.length, 0);
+  const page = coursePage([it('x', { course: 'IM31003' })], 'IM31005');
+  assert.equal(page.total, 0);
 });
 
 const pyq = (id, course, year, term, exam) => it(id, { type: 'pyq', course, year, term, exam });

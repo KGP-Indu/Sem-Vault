@@ -1,4 +1,6 @@
-# Publishes the site/ folder to GitHub Pages on every push to main.
+# Publishes the site/ folder to GitHub Pages on every push to main, after the tests pass.
+# Packaging (build) and publishing (deploy) are separate jobs on purpose: in one job, deploy-pages
+# can ask for the package before GitHub has registered it and fail with "No artifacts named github-pages".
 name: Publish site
 on:
   push:
@@ -10,7 +12,7 @@ permissions:
   id-token: write
 concurrency:
   group: pages
-  cancel-in-progress: true
+  cancel-in-progress: false # let a publish that has started finish
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -20,17 +22,21 @@ jobs:
         with:
           node-version: 24
       - run: npm test
-  deploy:
+  build:
     needs: test
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/configure-pages@v6
       - uses: actions/upload-pages-artifact@v5
         with:
           path: site
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
       - id: deployment
         uses: actions/deploy-pages@v5

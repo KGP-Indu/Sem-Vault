@@ -1,6 +1,6 @@
 // Web app entry points. The site POSTs JSON as text/plain (no CORS preflight).
 
-var UPLOADS_PER_HOUR = 30;
+var UPLOADS_PER_HOUR = 120; // shared by uploads and tips; batch uploads send one request per file
 var ROLE_RANK = { none: 0, mod: 1, owner: 2 };
 
 function doGet(e) {
@@ -16,6 +16,7 @@ function doPost(e) {
     var body = JSON.parse((e && e.postData && e.postData.contents) || '{}');
     var handler = {
       upload: handleUpload,
+      zip: handleZip,
       me: handleMe,
       pending: handlePending,
       library: handleLibrary,
@@ -98,6 +99,31 @@ function checkHourlyLimit() {
   var count = Number(CacheService.getScriptCache().get(key) || 0);
   if (count >= UPLOADS_PER_HOUR) fail('Too many submissions right now. Please try again in an hour.', 429);
   return function () { CacheService.getScriptCache().put(key, String(count + 1), 3700); };
+}
+
+// Anyone: zips the chosen live files (never pending or removed ones), named by title, and sends the zip back
+// base64-encoded. Browsers won't fetch Drive files across sites, so the zip has to be built here.
+function handleZip(body) {
+  var v = validateZipIds(body.ids);
+  if (!v.ok) fail(v.errors.join('. '));
+  var cache = CacheService.getScriptCache();
+  var key = 'zips:' + new Date().toISOString().slice(0, 13);
+  var count = Number(cache.get(key) || 0);
+  if (count >= 300) fail('Lots of people are downloading right now. Please try again in a little while.', 429);
+  cache.put(key, String(count + 1), 3700);
+
+  var byId = {};
+  readItems().forEach(function (it) { byId[it.id] = it; });
+  var items = v.ids.map(function (id) { return byId[id]; }).filter(function (it) { return it && it.status === 'approved'; });
+  if (!items.length) fail('Those files are no longer on the site. Reload the page.');
+  var files = items.map(function (it) { return DriveApp.getFileById(it.fileId); });
+  var total = files.reduce(function (n, f) { return n + f.getSize(); }, 0);
+  var tooBig = zipSizeError(total);
+  if (tooBig) fail(tooBig);
+  var names = zipEntryNames(items.map(function (it, i) { return { title: it.title, ext: extOf(files[i].getName(), 'pdf') }; }));
+  var name = zipName(readCourses(), items);
+  var zip = Utilities.zip(files.map(function (f, i) { return f.getBlob().setName(names[i]); }), name);
+  return { name: name, base64: Utilities.base64Encode(zip.getBytes()), count: items.length, skipped: v.ids.length - items.length };
 }
 
 function handleUpload(body) {
@@ -366,19 +392,43 @@ function handleUpdate(body) {
   });
 }
 
+// Add a course; edit one (body.oldCode: if the code changes, its files, tips and Drive folder follow);
+// or remove an empty one (body.remove + body.code).
 function handleSaveCourse(body) {
   var me = requireRole(body, 'mod');
-  var c = body.course || {};
-  var code = String(c.code || '').trim().toUpperCase();
-  var semester = Number(c.semester);
-  if (!/^[A-Z]{2}\d{5}$/.test(code)) fail('Course code looks like IM31005');
-  if (!String(c.name || '').trim()) fail('Course name is required');
-  if (!(semester >= 1 && semester <= 10 && Math.floor(semester) === semester)) fail('Semester must be 1 to 10');
-  var course = { code: code, name: String(c.name).trim(), short: String(c.short || '').trim() || code, semester: semester };
-  saveCourse(course);
-  log(me.email, 'course', code, course.name);
-  bustCache();
-  return { courses: readCourses() };
+  return withLock(function () {
+    var courses = readCourses();
+    var exists = function (code) { return courses.some(function (c) { return c.code === code; }); };
+
+    if (body.remove) {
+      var gone = String(body.code || '').trim().toUpperCase();
+      if (!exists(gone)) fail('Course not found', 404);
+      var n = courseUse(readItems(), readTips(), gone);
+      if (n) fail('This course still has ' + n + ' file' + (n === 1 ? '' : 's') + ' or tips on it. Move or remove those first.');
+      deleteRowByKey('Courses', gone);
+      log(me.email, 'remove-course', gone, '');
+      bustCache();
+      return { courses: readCourses() };
+    }
+
+    var v = validateCourse(body.course);
+    if (!v.ok) fail(v.errors.join('. '));
+    var course = v.course;
+    var oldCode = String(body.oldCode || '').trim().toUpperCase();
+    if (oldCode && !exists(oldCode)) fail('Course not found', 404);
+    if (oldCode !== course.code && exists(course.code)) fail(course.code + ' is already a course');
+    if (oldCode && oldCode !== course.code) {
+      var moved = moveCourseCode(readItems(), readTips(), oldCode, course.code);
+      moved.items.forEach(writeItem);
+      moved.tips.forEach(writeTip);
+      renameLiveFolder(oldCode, course.code);
+      deleteRowByKey('Courses', oldCode);
+    }
+    saveCourse(course);
+    log(me.email, 'course', course.code, course.name + (oldCode && oldCode !== course.code ? ' (was ' + oldCode + ')' : ''));
+    bustCache();
+    return { courses: readCourses() };
+  });
 }
 
 function handleActivity(body) {

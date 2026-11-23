@@ -13,12 +13,12 @@ test('buildDigest returns null when nothing is pending', () => {
 
 test('buildDigest subject counts uploads, plural', () => {
   const d = g.buildDigest([item('a', 'One'), item('b', 'Two')], courses, url, '2026-11-21T00:00:00Z');
-  assert.equal(d.subject, 'Sem Vault: 2 uploads waiting for review');
+  assert.equal(d.subject, 'Indu Sem Vault: 2 uploads waiting for review');
 });
 
 test('buildDigest subject singular for one upload', () => {
   const d = g.buildDigest([item('a', 'One')], courses, url, '2026-11-21T00:00:00Z');
-  assert.equal(d.subject, 'Sem Vault: 1 upload waiting for review');
+  assert.equal(d.subject, 'Indu Sem Vault: 1 upload waiting for review');
 });
 
 test('buildDigest body lists titles with course short name and time, and links the panel', () => {

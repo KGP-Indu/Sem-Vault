@@ -181,3 +181,12 @@ def test_build_accepts_only_the_six_section_types(tmp_path, kind, ok):
     else:
         with pytest.raises(SystemExit):
             seed.build(cands, root, tmp_path / 's', {'folders': {}, 'courses': []})
+
+
+def test_scan_no_longer_suggests_latex_sources(tmp_path):
+    root = tmp_path / 'sem'
+    (root / 'QDC').mkdir(parents=True)
+    (root / 'QDC' / 'Sheet.pdf').write_bytes(b'%PDF')
+    (root / 'QDC' / 'Sheet.tex').write_text('x')
+    rows = seed.scan_rows(root, {'folders': {'QDC': 'IM31005'}, 'courses': []})
+    assert [r['source'] for r in rows] == ['']

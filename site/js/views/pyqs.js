@@ -1,5 +1,6 @@
 import { filterPyqs, driveUrls } from '../lib/catalog.js';
 import { esc, courseOf, isSample } from './item.js';
+import { pickBox } from '../pick.js';
 
 const EXAM = { midsem: 'Midsem', endsem: 'Endsem' };
 
@@ -33,13 +34,15 @@ export function render(el, params, catalog) {
       return;
     }
     out.innerHTML = `
-      <p class="section-note">${rows.length} paper${rows.length === 1 ? '' : 's'}</p>
+      <div data-pickscope>
+      <p class="section-note">${rows.length} paper${rows.length === 1 ? '' : 's'}. <button class="link-btn" type="button" data-pickall>Select all</button></p>
       <table class="pyq-table">
-        <thead><tr><th>Course</th><th>Year</th><th>Exam</th><th>Paper</th><th><span class="sr-only">Download</span></th></tr></thead>
+        <thead><tr><th><span class="sr-only">Select</span></th><th>Course</th><th>Year</th><th>Exam</th><th>Paper</th><th><span class="sr-only">Download</span></th></tr></thead>
         <tbody>${rows.map((r) => {
           const c = courseOf(catalog, r.course) || { short: r.course };
           const u = driveUrls(r.fileId);
           return `<tr>
+            <td class="pyq-pick">${pickBox(r)}</td>
             <td data-label="Course"><a href="#/course/${esc(r.course)}">${esc(c.short)}</a></td>
             <td data-label="Year">${esc(r.year || '?')} ${esc(r.term || '')}</td>
             <td data-label="Exam">${esc(EXAM[r.exam] || '?')}</td>
@@ -49,7 +52,8 @@ export function render(el, params, catalog) {
               : `<a class="btn btn-small" href="${u.download}">Download</a>`}</td>
           </tr>`;
         }).join('')}</tbody>
-      </table>`;
+      </table>
+      </div>`;
   };
   form.addEventListener('change', draw);
   draw();

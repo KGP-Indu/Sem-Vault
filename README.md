@@ -1,6 +1,8 @@
-# Sem Vault
+# Indu Sem Vault
 
-A free, student-run library for the IM department at IIT Kharagpur. You browse it by **semester → course**. Every course page has the same six sections: **Books**, **PPTs & class notes**, **Short notes & formulas**, **PYQs**, **Tests** and **Assignments**. Labs are courses of their own. A **Professors** section collects students' tips on how each prof teaches and grades. Anyone can upload. A mod approves each upload before it goes public. Claude-made PDFs come with their LaTeX source, so the next person's AI agent can edit them instead of starting from scratch.
+*One place for all academic needs.*
+
+A free library run by Indumatis, for Indumatis, at IIT Kharagpur. You browse it by **semester → course**. Every course page has the same six sections: **Books**, **PPTs & class notes**, **Short notes & formulas**, **PYQs**, **Tests** and **Assignments**. Labs are courses of their own. A **Professors** section collects students' tips on how each prof teaches and grades. Anyone can upload, one file or many at once. A mod approves each upload before it goes public. Tick files on any course, PYQ or search page and download them together as one zip.
 
 - **Site:** static pages in `site/`, hosted free on GitHub Pages.
 - **Backend:** a Google Apps Script in `apps-script/`. It stores files in Google Drive and the catalog in a Google Sheet, both owned by **kgp.indu@gmail.com**.
@@ -87,7 +89,7 @@ You need Python 3. Run these from this folder.
    python seed/seed.py scan "C:\path\to\the semester folder" --out seed/candidates.csv
    ```
    - The scan skips code and build folders (`sim`, anything ending in `_src`, `__pycache__`, `backup…`, `bin`, `out`, figure folders, `.obsidian`, `_inbox`).
-   - It lists PDFs, DOCX and PPTX files, pairs each PDF with a same-named `.tex`, and reads question paper filenames for course, year and exam.
+   - It lists PDFs, DOCX and PPTX files and reads question paper filenames for course, year and exam. (LaTeX sources are no longer uploaded.)
    - Course codes come from `seed/courses.json` (folder → code). Add new folders and courses there.
 2. **Trim the list.** Open `seed/candidates.csv` in Excel or Google Sheets. This step is what keeps the site from becoming an overwhelming dump:
    - Set `include` to `n` for anything a junior doesn't need: drafts, duplicates, project dumps, personal stuff.
@@ -97,7 +99,6 @@ You need Python 3. Run these from this folder.
    ```powershell
    python seed/seed.py build seed/candidates.csv --root "C:\path\to\the semester folder" --staging seed/staging
    ```
-   When a `.tex` uses figures or other files, they're zipped together so the source still compiles.
 4. **Import:** drag everything inside `seed/staging/` into Drive's **Sem Vault/Seed** folder. Then, in the Apps Script editor, run **`importSeed`**.
    - If it stops at the 6-minute limit, just run it again. Items that were already imported are skipped.
    - After that, empty the `Seed` folder.
@@ -111,6 +112,7 @@ For Sem 5, `seed/courses.json` already maps EE, QDC, Simulation, SCM and HPSC. *
 - **Mods** get the digest email when uploads or professor tips are waiting. In the **Mod panel**:
   - **Queue**: fix the title or course and approve, or reject with a reason. Uploads for a course that isn't listed need **Add a new course…** first.
   - **Queue** also holds **professor tips**: fix the wording, professor, course or year and approve, or reject with a reason. Approving the first tip about a professor a student typed in also adds that professor; fix the spelling of the name before approving.
+  - **Courses**: add a course, or edit its name, short name, semester or code. Changing a code moves its files, tips and Drive folder along. A course can be removed only when nothing is filed under it.
   - **Library**: edit or remove live files and live tips. Removed files go to `Rejected/` in Drive, so they can be recovered. Changing a title renames the file in Drive too, so downloads keep matching.
   - **Professors**: add a professor, or fix a misspelt name.
   - **Activity**: who did what, newest first.
@@ -136,10 +138,11 @@ If ownership ever has to move to a *different* Google account, transfer the Driv
 
 ## Limits worth knowing
 
-- Files over **25 MB** are refused, and a file plus its source must be under **35 MB** together (Apps Script's request size limit). Compress or split big PDFs.
+- Files over **25 MB** are refused (Apps Script's request size limit). Compress or split big PDFs.
+- **Download as zip** takes up to 30 files and 25 MB per zip (Apps Script's response size limit). Bigger selections are refused with a message to download in parts.
 - The free Gmail account has **15 GB** of Drive. Sem 5 is about 350 MB, so there's room for many batches.
 - Mail: about 100 recipients a day. Two digests to even 10 mods is fine.
-- At most 30 uploads an hour across everyone, to slow down spam.
+- At most 120 uploads and tips an hour across everyone, to slow down spam. A batch upload sends one per file.
 - The public list is cached for up to 10 minutes. Mod actions clear the cache straight away.
 
 ## Troubleshooting

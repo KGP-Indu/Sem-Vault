@@ -12,7 +12,7 @@ export function render(el, params, catalog) {
     <h1>Results for “${esc(q)}”</h1>
     ${courseHits.length ? `<p class="section-note">Courses: ${courseHits.map((c) => `<a href="#/course/${esc(c.code)}">${esc(c.name)}</a>`).join(', ')}</p>` : ''}
     ${hits.length
-      ? `<ul class="items">${hits.map((i) => itemRow(i, { showCourse: courseOf(catalog, i.course) || { code: i.course, short: i.course } })).join('')}</ul>`
+      ? `<div data-pickscope><p class="pick-all"><button class="link-btn" type="button" data-pickall>Select all</button></p><ul class="items">${hits.map((i) => itemRow(i, { showCourse: courseOf(catalog, i.course) || { code: i.course, short: i.course } })).join('')}</ul></div>`
       : `<p class="empty">Nothing matches “${esc(q)}”. Try a course code like IM31005, or <a href="#/pyqs">browse question papers</a>.</p>`}
   `;
 }

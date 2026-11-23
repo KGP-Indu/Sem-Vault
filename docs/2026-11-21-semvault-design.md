@@ -118,3 +118,11 @@ Agreed with the owner after using the live site:
 2. **Six sections on every course page:** Books, PPTs & class notes, Short notes & formulas, PYQs, Tests, Assignments (types `book`, `slides`, `shortnotes`, `pyq`, `test`, `assignment`). Each shows its count and opens on tap. Explainers count as Short notes & formulas. **Labs are separate courses** with the same sections (reports and viva guides go under Assignments). **"Start here" is removed.** Old types map on read: formula/notes/other → shortnotes, lab → assignment.
 3. **Professor pages.** A Professors list, and one page per prof with the courses they taught (with years, from approved tips) and student tips newest first. Course pages link their profs. Anyone submits a tip (prof or a new prof name, course, year, text, optional name); mods approve tips in the same queue; a new prof is confirmed when its first tip is approved. Written tips only, no star ratings. Sheet tabs `Profs` and `Tips`.
 4. **Speed.** The browser keeps the last catalog and shows it instantly, refreshing in the background (stale-while-revalidate); scripts are preloaded in parallel; the backend call starts at page load. A first visit is still ~2 s (Apps Script's floor).
+
+## Revision 3 (2026-11-23)
+
+1. **Name:** Indu Sem Vault, tagline "One place for all academic needs.", footer "Run by Indumatis, for Indumatis."
+2. **Batch upload:** several files per upload; each is a row (title, course, section) filled in from its file name; sent one request per file. Shared hourly limit raised to 120.
+3. **Courses tab** in the mod panel: add, edit (name, short name, semester, code; a code change moves files, tips and the Drive folder), remove when empty.
+4. **No LaTeX sources:** no upload field, no "Source" button, scanner suggests none. Existing source files stay in Drive unused.
+5. **Download a selection:** checkboxes on file rows (course pages, PYQs, search), kept for the session; a bottom bar zips them. The backend builds the zip (Drive files can't be fetched cross-site): up to 30 files, 25 MB, live files only.

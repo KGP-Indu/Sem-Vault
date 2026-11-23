@@ -19,7 +19,7 @@ function courseLabel(code, courses) {
 function buildDigest(pending, courses, modUrl, nowIso) {
   if (!pending || pending.length === 0) return null;
   var n = pending.length;
-  var subject = 'Sem Vault: ' + n + ' upload' + (n === 1 ? '' : 's') + ' waiting for review';
+  var subject = 'Indu Sem Vault: ' + n + ' upload' + (n === 1 ? '' : 's') + ' waiting for review';
   var lines = pending.map(function (it) {
     return '- ' + it.title + ' [' + courseLabel(it.course, courses || []) + '], uploaded ' + formatIst(it.uploadedAt);
   });

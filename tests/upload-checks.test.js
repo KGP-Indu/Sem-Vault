@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { uploadErrors, MAX_BYTES } from '../site/js/lib/upload.js';
 
-const ok = { title: 'Notes', course: 'IM31005', type: 'slides', file: { name: 'a.pdf', size: 1000 }, source: null };
+const ok = { title: 'Notes', course: 'IM31005', type: 'slides', file: { name: 'a.pdf', size: 1000 } };
 
 test('a valid upload has no errors', () => {
   assert.deepEqual(uploadErrors(ok), {});
@@ -24,8 +24,23 @@ test('a not-listed course needs a name', () => {
   assert.deepEqual(uploadErrors({ ...ok, course: 'OTHER:Ergonomics' }), {});
 });
 
-test('the source must be .tex or .zip and under 25 MB', () => {
-  assert.equal(uploadErrors({ ...ok, source: { name: 'a.docx', size: 10 } }).source, 'Source must be a .tex or .zip file');
-  assert.equal(uploadErrors({ ...ok, source: { name: 'a.zip', size: MAX_BYTES + 1 } }).source, 'Max 25 MB per file');
-  assert.deepEqual(uploadErrors({ ...ok, source: { name: 'Sheet.TEX', size: 10 } }), {});
+// ---- batch upload ----
+import { rowDefaults } from '../site/js/lib/upload.js';
+
+const f = (name, size = 10) => ({ name, size });
+
+const courses = [{ code: 'IM31005', short: 'QDC', name: 'Quality Design and Control', semester: 5 }];
+
+test('rowDefaults reads a question paper name into course, type, year, term, exam and a short title', () => {
+  assert.deepEqual(rowDefaults('12834_IM31005_QUALITY-DESIGN-AND-CONTROL_2025_autumn_endsem.pdf', courses, { course: '', type: 'shortnotes' }),
+    { title: 'QDC endsem 2025', course: 'IM31005', type: 'pyq', year: '2025', term: 'autumn', exam: 'endsem' });
+});
+
+test('rowDefaults falls back to the chosen course and type and a tidy title', () => {
+  assert.deepEqual(rowDefaults('control_charts-summary.pdf', courses, { course: 'IM31005', type: 'slides' }),
+    { title: 'control charts summary', course: 'IM31005', type: 'slides', year: '', term: '', exam: '' });
+});
+
+test('rowDefaults ignores a course code that is not on the site', () => {
+  assert.equal(rowDefaults('IM99999_x_2024_midsem.pdf', courses, { course: 'IM31005', type: 'pyq' }).course, 'IM31005');
 });

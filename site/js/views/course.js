@@ -22,7 +22,8 @@ export function render(el, params, catalog) {
       <details class="group" data-type="${s.type}"${s.items.length ? '' : ' data-empty'}>
         <summary><span>${TYPE_LABELS[s.type]}</span><span class="group-count">${s.items.length}</span></summary>
         ${s.items.length
-          ? `<ul class="items">${s.items.map((i) => itemRow(i)).join('')}</ul>`
+          ? `<div data-pickscope><p class="pick-all"><button class="link-btn" type="button" data-pickall>Select all</button></p>
+            <ul class="items">${s.items.map((i) => itemRow(i)).join('')}</ul></div>`
           : `<p class="empty">Nothing here yet. Have some? <a href="#/upload?course=${esc(course.code)}&type=${s.type}">Upload it</a>.</p>`}
       </details>`).join('')}
     </div>

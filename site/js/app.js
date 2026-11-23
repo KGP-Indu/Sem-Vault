@@ -1,5 +1,8 @@
 import { getCatalog, previewMode } from './api.js';
 import { SITE_NAME } from './config.js';
+import { initPicking, selection } from './pick.js';
+
+const picking = initPicking();
 
 const routes = [
   [/^\/?$/, 'home'],
@@ -34,7 +37,9 @@ function parseHash() {
 }
 
 function paint(mod, view, params, catalog) {
+  selection.keepOnly(new Set(catalog.items.map((i) => i.id))); // drop picks that left the site
   mod.render(main, params, catalog, { rerender: route });
+  picking.sync();
   if (!performance.getEntriesByName('sv:first-paint').length) performance.mark('sv:first-paint'); // for speed checks
   const h1 = main.querySelector('h1')?.textContent;
   document.title = view === 'home' || !h1 ? SITE_NAME : `${h1} | ${SITE_NAME}`;

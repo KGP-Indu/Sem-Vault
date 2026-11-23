@@ -7,7 +7,8 @@ export function render(el, params, catalog) {
   const sems = semesters(catalog.courses);
   el.innerHTML = `
     <section class="intro">
-      <h1>Notes, formula sheets and question papers from IM seniors, sorted by course.</h1>
+      <h1>One place for all academic needs.</h1>
+      <p class="lede">Notes, PYQs, books and professor tips from seniors, sorted by course.</p>
       <form class="big-search" role="search" data-search>
         <label class="sr-only" for="home-q">Search</label>
         <input id="home-q" name="q" type="search" placeholder="Search a topic, course or code" autocomplete="off">

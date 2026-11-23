@@ -79,9 +79,24 @@ export async function handle(action, body) {
       }
       case 'saveCourse': {
         const me = need(body, 'mod');
-        const c = { ...body.course, code: String(body.course.code).toUpperCase(), semester: Number(body.course.semester) };
+        const live = (x) => x.status === 'approved' || x.status === 'pending';
+        if (body.remove) {
+          const n = state.items.filter((x) => x.course === body.code && live(x)).length + state.tips.filter((t) => t.course === body.code && live(t)).length;
+          if (n) fail(`This course still has ${n} files or tips on it. Move or remove those first.`);
+          state.courses = state.courses.filter((x) => x.code !== body.code);
+          log(me, 'remove-course', body.code, '');
+          return { courses: state.courses };
+        }
+        const c = { ...body.course, code: String(body.course.code).trim().toUpperCase(), semester: Number(body.course.semester) };
+        c.short = String(c.short || '').trim() || c.code;
         if (!/^[A-Z]{2}\d{5}$/.test(c.code)) fail('Course code looks like IM31005');
-        state.courses = state.courses.filter((x) => x.code !== c.code).concat([c]);
+        const old = body.oldCode || '';
+        if (old !== c.code && state.courses.some((x) => x.code === c.code)) fail(`${c.code} is already a course`);
+        if (old && old !== c.code) {
+          state.items.forEach((x) => { if (x.course === old) x.course = c.code; });
+          state.tips.forEach((t) => { if (t.course === old) t.course = c.code; });
+        }
+        state.courses = state.courses.filter((x) => x.code !== c.code && x.code !== old).concat([c]);
         log(me, 'course', c.code, c.name);
         return { courses: state.courses };
       }
@@ -146,6 +161,13 @@ export async function handle(action, body) {
         return { mods: state.mods, requests: state.requests };
       }
       case 'upload': return { id: 'mock' + Date.now() };
+      case 'zip': { // not a real zip: just enough to try the download flow
+        const ids = body.ids || [];
+        if (!ids.length) fail('Pick at least one file');
+        if (ids.length > 30) fail('Pick at most 30 files per zip');
+        const live = ids.filter((id) => state.items.some((x) => x.id === id && x.status === 'approved'));
+        return { name: 'Indu Sem Vault - selection.zip', base64: btoa(`Mock zip of ${live.length} files: ${live.join(', ')}`), count: live.length, skipped: ids.length - live.length };
+      }
       default: fail('Unknown action');
     }
   })();

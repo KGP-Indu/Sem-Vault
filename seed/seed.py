@@ -152,13 +152,13 @@ def scan_rows(root, conf):
             continue
         course = course_for(rel, conf)
         kind = guess_type(rel)
-        src = find_source(f)
+        # Revision 3: LaTeX sources are no longer uploaded, so none are suggested.
         p = parse_pyq(f.name) if kind == 'pyq' else {'year': None, 'term': None, 'exam': None}
         # "Notes (1).pdf" next to "Notes.pdf" is almost always a duplicate download.
         dup = re.search(r'\s\(\d+\)$', f.stem) and f.with_name(re.sub(r'\s\(\d+\)$', '', f.stem) + f.suffix).exists()
         rows.append({
             'include': 'n' if dup else 'y', 'path': rel, 'course': course, 'type': kind,
-            'title': nice_title(f, shorts.get(course)), 'source': src.relative_to(root).as_posix() if src else '',
+            'title': nice_title(f, shorts.get(course)), 'source': '',
             'year': p['year'] or '', 'term': p['term'] or '', 'exam': p['exam'] or '',
         })
     return rows

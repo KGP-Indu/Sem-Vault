@@ -8,7 +8,7 @@ import { esc, courseOf } from './item.js';
 let session = null; // { token, email, role }
 
 const TABS = [
-  ['queue', 'Queue'], ['library', 'Library'], ['profs', 'Professors'], ['activity', 'Activity'], ['owner', 'Mods'],
+  ['queue', 'Queue'], ['library', 'Library'], ['courses', 'Courses'], ['profs', 'Professors'], ['activity', 'Activity'], ['owner', 'Mods'],
 ];
 
 export function render(el, params) {
@@ -31,7 +31,7 @@ export function render(el, params) {
     render(el, params);
   });
   const body = el.querySelector('[data-tab]');
-  const views = { queue: tabQueue, library: tabLibrary, profs: tabProfs, activity: tabActivity, owner: tabOwner };
+  const views = { queue: tabQueue, library: tabLibrary, courses: tabCourses, profs: tabProfs, activity: tabActivity, owner: tabOwner };
   views[tab](body, params).catch((err) => handleError(el, params, body, err));
 }
 
@@ -233,7 +233,7 @@ function queueCard(it, courses) {
     <header>
       <h3>${esc(it.title)}</h3>
       <p class="section-note">Uploaded by ${by}, ${esc(fmtTime(it.uploadedAt))}</p>
-      <p><a href="${esc(it.fileUrl)}" target="_blank" rel="noopener">Open the file</a>${it.sourceUrl ? ` and <a href="${esc(it.sourceUrl)}" target="_blank" rel="noopener">its source (${esc(it.sourceName)})</a>` : ''}</p>
+      <p><a href="${esc(it.fileUrl)}" target="_blank" rel="noopener">Open the file</a></p>
     </header>
     <form class="q-form" data-form>
       <label>Title<input name="title" type="text" value="${esc(it.title)}"></label>
@@ -384,6 +384,71 @@ async function tabLibrary(body, params) {
   });
 }
 
+// ---------------- Courses ----------------
+
+function courseFields(c = {}) {
+  return `
+    <label>Code<input name="code" type="text" maxlength="7" value="${esc(c.code || '')}" placeholder="IM31005" required></label>
+    <label>Name<input name="name" type="text" value="${esc(c.name || '')}" placeholder="Quality Design and Control" required></label>
+    <label>Short name<input name="short" type="text" value="${esc(c.short || '')}" placeholder="QDC"></label>
+    <label>Semester<input name="semester" type="number" min="1" max="10" value="${esc(c.semester || '')}" required></label>`;
+}
+
+async function tabCourses(body, params) {
+  const catalog = await refreshCatalog();
+  const counts = {};
+  for (const it of catalog.items) counts[it.course] = (counts[it.course] || 0) + 1;
+  body.innerHTML = `
+    <p class="section-note">The courses on the site. Changing a code moves its files and tips to the new code. A course can be removed once nothing is filed under it.</p>
+    <details class="add-course"><summary class="btn btn-quiet">Add a course</summary>
+      <form class="q-form" data-addcourse>${courseFields()}
+        <div class="q-actions span"><button class="btn">Add course</button></div></form>
+    </details>
+    <p class="form-error" data-err role="alert"></p>
+    ${semesters(catalog.courses).map((s) => `
+      <h2>Semester ${s.semester}</h2>
+      <ul class="pick-list">${s.courses.map((c) => `
+        <li data-course="${esc(c.code)}">
+          <span>${esc(c.name)} <span class="section-note">${esc(c.code)}, ${esc(c.short)}, ${counts[c.code] || 0} file${counts[c.code] === 1 ? '' : 's'}</span></span>
+          <span class="pick-actions"><button class="btn btn-small btn-quiet" data-editcourse>Edit</button>
+          <button class="btn btn-small btn-danger" data-removecourse>Remove</button></span>
+        </li>`).join('')}</ul>`).join('') || '<p class="empty">No courses yet. Add the first one above.</p>'}`;
+  const err = body.querySelector('[data-err]');
+  const save = async (payload, errEl = err) => {
+    errEl.textContent = '';
+    try {
+      await call('saveCourse', payload);
+      clearCatalogCache();
+      tabCourses(body, params);
+    } catch (e) {
+      if (e.code === 401 || e.code === 403) return handleError(body.closest('main'), params, body, e);
+      errEl.textContent = e.message;
+    }
+  };
+  const read = (f) => ({ code: f.code.value, name: f.name.value, short: f.short.value, semester: f.semester.value });
+  body.querySelector('[data-addcourse]').addEventListener('submit', (e) => { e.preventDefault(); save({ course: read(e.target) }); });
+  body.querySelectorAll('[data-course]').forEach((li) => {
+    const course = catalog.courses.find((c) => c.code === li.dataset.course);
+    li.querySelector('[data-removecourse]').addEventListener('click', () => {
+      if (confirm(`Remove ${course.name} (${course.code}) from the site?`)) save({ remove: true, code: course.code });
+    });
+    li.querySelector('[data-editcourse]').addEventListener('click', () => {
+      li.innerHTML = `<form class="q-form course-edit" data-editform>${courseFields(course)}
+        <div class="q-actions span"><button class="btn btn-small">Save</button>
+        <button class="btn btn-small btn-quiet" type="button" data-cancel>Cancel</button></div>
+        <p class="form-error span" data-err></p></form>`;
+      li.querySelector('[data-cancel]').addEventListener('click', () => tabCourses(body, params));
+      li.querySelector('[data-editform]').addEventListener('submit', (e) => {
+        e.preventDefault();
+        const next = read(e.target);
+        const codeChanged = next.code.trim().toUpperCase() !== course.code;
+        if (codeChanged && !confirm(`Change the code from ${course.code} to ${next.code.trim().toUpperCase()}? Its files and tips move with it.`)) return;
+        save({ oldCode: course.code, course: next }, li.querySelector('[data-err]'));
+      });
+    });
+  });
+}
+
 // ---------------- Professors ----------------
 
 async function tabProfs(body, params) {
@@ -431,7 +496,7 @@ const ACTION_LABELS = {
   upload: 'uploaded', approve: 'approved', reject: 'rejected', edit: 'edited', remove: 'removed',
   course: 'saved course', 'request-mod': 'asked to be a mod',
   tip: 'sent a tip', 'approve-tip': 'approved a tip:', 'reject-tip': 'rejected a tip:', 'remove-tip': 'removed a tip:',
-  'edit-tip': 'edited a tip:', prof: 'saved professor', 'remove-prof': 'removed professor',
+  'edit-tip': 'edited a tip:', prof: 'saved professor', 'remove-prof': 'removed professor', 'remove-course': 'removed course',
   'mod-add': 'made a mod:', 'mod-remove': 'removed mod', 'mod-decline': 'declined mod request from', 'seed-import': 'imported',
 };
 

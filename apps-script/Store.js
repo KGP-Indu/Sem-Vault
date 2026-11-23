@@ -156,6 +156,23 @@ function rejectedFolder() { return subfolder(rootFolder(), 'Rejected'); }
 function seedFolder() { return subfolder(rootFolder(), 'Seed'); }
 function liveFolder(code) { return subfolder(subfolder(rootFolder(), 'Live'), code); }
 
+// When a course code changes, its Drive folder Live/<code> follows (merged if the new one already exists).
+function renameLiveFolder(oldCode, newCode) {
+  var live = subfolder(rootFolder(), 'Live');
+  var found = live.getFoldersByName(oldCode);
+  if (!found.hasNext()) return;
+  var from = found.next();
+  var existing = live.getFoldersByName(newCode);
+  if (!existing.hasNext()) {
+    from.setName(newCode);
+    return;
+  }
+  var to = existing.next();
+  var files = from.getFiles();
+  while (files.hasNext()) files.next().moveTo(to);
+  from.setTrashed(true);
+}
+
 function saveBase64(folder, name, mimeType, base64) {
   var blob = Utilities.newBlob(Utilities.base64Decode(base64), mimeType || 'application/octet-stream', name);
   var file = folder.createFile(blob);

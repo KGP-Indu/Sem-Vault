@@ -68,12 +68,6 @@ test('#5 catalog cache chunks stay under 100 KB in bytes and a cache failure is 
   assert.doesNotThrow(() => failing.cachePutCatalog('x'));
 });
 
-test('#6 file plus source over 35 MB together is blocked in the browser', () => {
-  const MB = 1024 * 1024;
-  const e = uploadErrors({ title: 'a', course: 'IM31005', file: { name: 'a.pdf', size: 20 * MB }, source: { name: 'a.zip', size: 20 * MB } });
-  assert.equal(e.source, 'File and source together must be under 35 MB');
-});
-
 test('#6 server refuses file plus source over 35 MB together', () => {
   const g = loadGas('Catalog.js');
   const b64 = (mb) => 'A'.repeat(Math.ceil(mb * 1024 * 1024 * 4 / 3));

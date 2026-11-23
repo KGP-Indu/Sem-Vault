@@ -1,5 +1,5 @@
 seed/staging/
-seed/candidates.csv
+seed/candidates*.csv
 node_modules/
 .clasp.json
 .superpowers/
